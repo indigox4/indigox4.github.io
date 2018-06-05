@@ -93,7 +93,8 @@
         
         var reqIndex = mapRequest.index;
         var onResponse = function( response, status ) {
-          if ( status === 'OK' ) {
+          if( status === 'OK' && 
+              gMapRequests[reqIndex].status != kFailure ) {
             var point = response.routes[ 0 ].legs[ 0 ];
 
             if( !isDriving ) {
