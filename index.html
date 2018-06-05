@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Simple Map</title>
+    <meta name="viewport" content="initial-scale=1.0">
+    <meta charset="utf-8">
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 20%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      table, th, td {
+          border: 0px solid black;
+      }      
+      tr:nth-child(even) { background: #CCC};
+      tr:nth-child(odd)  { background: #FFF};
+
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div>
+      <form onsubmit="return false" autocomplete="on">
+        <input type="text" size=50 id="PropertyOfInterest" name="PropertyOfInterestName">
+        <input type="submit" onclick="onSubmitClicked()">
+      </form>
+    </div>
+    <div id="time"></div>
+    <div id="requests"></div>
+    <!-- <script src="https://maps.googleapis.com/maps/api/js"></script> -->
+    <script>
+      var map;
+      var gMapRequests = [];
+      var kPending = 0;
+      var kSuccess = 1;
+      var kFailure = 2;
+      var gPropertyOfInterest = "";
+
+      function onSubmitClicked() {
+        console.log("onSubmitClicked");
+        gPropertyOfInterest = document.getElementById('PropertyOfInterest').value;
+        console.log("gPropertyOfInterest: " + gPropertyOfInterest);
+        initMap();
+      }
+
+      function MapRequest() {
+        this.start = "";
+        this.end = "";
+        this.index = 0;
+        this.mode = google.maps.DirectionsTravelMode.DRIVING;
+        this.departTime = new Date('2018-08-20T16:00:00');
+        this.bestGuessTime = "";
+        this.optimisticTime = "";
+        this.pessimisticTime = "";
+        this.status = kPending; 
+        this.errMsg = "";
+      }
+
+      function addRequest( request ) {
+        request.index = gMapRequests.length;
+        gMapRequests.push( request );
+      }
+
+      function startRequest( mapRequest, delay ) {
+        console.log("start request");
+        addRequest( mapRequest );
+        var request = {
+          origin: mapRequest.start, 
+          destination: mapRequest.end, 
+          travelMode: mapRequest.mode,
+          provideRouteAlternatives: false
+        };
+        
+        var isDriving = (mapRequest.mode === google.maps.DirectionsTravelMode.DRIVING); 
+        if( isDriving ) {
+          request.drivingOptions = {
+            departureTime: mapRequest.departTime,
+            trafficModel: google.maps.TrafficModel.BEST_GUESS
+          }
+        } else {
+          request.transitOptions = {
+            departureTime: mapRequest.departTime
+          }
+        }
+        
+        var reqIndex = mapRequest.index;
+        var onResponse = function( response, status ) {
+          if ( status === 'OK' ) {
+            var point = response.routes[ 0 ].legs[ 0 ];
+
+            if( !isDriving ) {
+              gMapRequests[reqIndex].status = kSuccess;
+              gMapRequests[reqIndex].bestGuessTime = point.duration.text;
+            } else {
+              if( response.request.drivingOptions.trafficModel === 
+                  google.maps.TrafficModel.BEST_GUESS) {
+                gMapRequests[reqIndex].bestGuessTime = point.duration_in_traffic.text;
+              } else if( response.request.drivingOptions.trafficModel === 
+                         google.maps.TrafficModel.OPTIMISTIC ) {
+                gMapRequests[reqIndex].optimisticTime = point.duration_in_traffic.text;
+              } else if( response.request.drivingOptions.trafficModel === 
+                         google.maps.TrafficModel.PESSIMISTIC ) {
+                gMapRequests[reqIndex].pessimisticTime = point.duration_in_traffic.text;
+                gMapRequests[reqIndex].status = kSuccess;
+              }
+            }
+            //console.log(JSON.stringify( response ) );
+          } else {
+            gMapRequests[reqIndex].status = kFailure;
+            gMapRequests[reqIndex].errMsg = status;
+            console.log("Routing error! Response dump:");
+            console.log(JSON.stringify( response ) );
+          }
+          refreshUI();
+        }
+        
+        setTimeout( function() {
+          var directionsService = new google.maps.DirectionsService();
+          directionsService.route( request, onResponse ); 
+        }, delay );
+        
+        if( isDriving ) {
+          
+          setTimeout( function() {
+            request.drivingOptions.trafficModel = 
+              google.maps.TrafficModel.OPTIMISTIC;
+            var directionsService = new google.maps.DirectionsService();
+            directionsService.route( request, onResponse ); 
+          }, delay+330 );
+
+          setTimeout( function() {
+            request.drivingOptions.trafficModel = 
+              google.maps.TrafficModel.PESSIMISTIC; 
+            var directionsService = new google.maps.DirectionsService();
+            directionsService.route( request, onResponse ); 
+          }, delay+660 );
+        }
+      }
+
+      function refreshUI() {
+        var html = "<table>";
+        html += "<tr><th>From</th><th>To</th><th>Departing at</th><th>Travel time</th></tr>";
+        for(i = 0; i < gMapRequests.length; ++i ) {
+          html += "<tr>";
+          html += "<td>" + gMapRequests[i].start + "</td>";
+          html += "<td>" + gMapRequests[i].end + "</td>";
+          html += "<td>" + gMapRequests[i].departTime.toLocaleTimeString()  + "</td>";
+
+          if( gMapRequests[i].status === kPending ) {
+            html += "<td>Calculating</td>";
+
+          } else if( gMapRequests[i].status === kSuccess ) {
+            if( gMapRequests[i].mode === google.maps.DirectionsTravelMode.DRIVING ) {
+              html += "<td>" + gMapRequests[i].bestGuessTime 
+                      + " (" + gMapRequests[i].optimisticTime + " - " 
+                      + gMapRequests[i].pessimisticTime + ")</td>";
+            } else {
+              html += "<td>" + gMapRequests[i].bestGuessTime + "</td>";
+            }
+          } else {
+            html += "<td>Error! " + gMapRequests[i].errMsg + "</td>";
+          }
+        }
+        html += "</table>";
+        document.getElementById('requests').innerHTML = html;
+      }
+
+      function initMap() {
+        console.log("initMap: " + gPropertyOfInterest );
+
+        // Do nothing if no property specified
+        if( !gPropertyOfInterest ) {
+          return;
+        }
+
+        // clear existing results
+        // TODO: Must cancel requests currently in flight
+        // or at least invalidate them somehow. otherwise
+        // they will mess up the table.
+        gMapRequests = [];
+
+        var mrQueue = [];
+        var work1 = "7120 Hurontario St, Mississauga, ON L5S 1Z8";
+        var work2 = "101 College St, Toronto, ON M5G 1L7";
+
+        var mr = new MapRequest();
+        mr.start = gPropertyOfInterest;
+        mr.end = work1;
+        mr.departTime = new Date('2018-08-20T08:00:00');
+        mrQueue.push( mr );
+
+        // reverse trip
+        mr = new MapRequest();
+        mr.start = work1;
+        mr.end = gPropertyOfInterest;
+        mr.departTime = new Date('2018-08-20T16:30:00');
+        mrQueue.push( mr );
+
+        mr = new MapRequest();
+        mr.start = gPropertyOfInterest;
+        mr.end = work1;
+        mr.departTime = new Date('2018-08-20T07:00:00');
+        mrQueue.push( mr );
+
+        // reverse trip
+        mr = new MapRequest();
+        mr.start = gPropertyOfInterest;
+        mr.end = work1;
+        mr.departTime = new Date('2018-08-20T15:30:00');
+        mrQueue.push( mr );
+
+        mr = new MapRequest();
+        mr.start = gPropertyOfInterest;
+        mr.end = work2;
+        mr.mode = google.maps.DirectionsTravelMode.TRANSIT;
+        mr.departTime = new Date('2018-06-20T09:00:00');
+        mrQueue.push( mr );
+
+        // reverse trip
+        mr = new MapRequest();
+        mr.start = work2;
+        mr.end = gPropertyOfInterest;
+        mr.mode = google.maps.DirectionsTravelMode.TRANSIT;
+        mr.departTime = new Date('2018-06-20T17:30:00');
+        mrQueue.push( mr );
+
+        for( i = 0; i < mrQueue.length; ++i ) {
+          startRequest( mrQueue[i], i * 1000 );
+        }
+
+        refreshUI();
+
+        // center the map around the property of interest
+        var coder = new google.maps.Geocoder();
+        var coderReq = {
+          address: gPropertyOfInterest
+        };
+        coder.geocode( coderReq, function(results, status) {
+          if( status === 'OK' ) {
+            map.setCenter( results[0].geometry.location );
+            map.setZoom(15);
+
+            var markerOpts = {
+              map: map,
+              position: results[0].geometry.location
+            };
+            var marker = new google.maps.Marker( markerOpts )
+          }
+        });
+      }
+
+      function onGoogleMap() {
+        console.log("onGoogleMap");
+        
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: {lat: -25.344, lng: 131.036},
+          zoom: 8
+        });        
+      }
+
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD3MaQdE7XUHMs8ibUkSDRJM0CimlaPiXI&callback=onGoogleMap"
+    async defer></script>
+  </body>
+</html>
