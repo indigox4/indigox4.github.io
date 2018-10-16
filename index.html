@@ -154,7 +154,7 @@
           html += "<tr>";
           html += "<td>" + gMapRequests[i].start + "</td>";
           html += "<td>" + gMapRequests[i].end + "</td>";
-          html += "<td>" + gMapRequests[i].departTime.toLocaleTimeString()  + "</td>";
+          html += "<td>" + gMapRequests[i].departTime.toLocaleString() + "</td>";
 
           if( gMapRequests[i].status === kPending ) {
             html += "<td>Calculating</td>";
@@ -175,6 +175,21 @@
         document.getElementById('requests').innerHTML = html;
       }
 
+      function getTravelDate( hour, min ) 
+      {
+        var travelDate = new Date();  // initialized to today's date.
+        
+        var offset = [1,1,1,1,1,3,2]; // move to the next nearest workday.
+
+        travelDate.setDate( travelDate.getDate() + offset[ travelDate.getDay() ]);
+        travelDate.setHours( hour );
+        travelDate.setMinutes( min );
+        travelDate.setSeconds(0);
+        travelDate.setMilliseconds(0);
+        
+        return travelDate;
+      }
+
       function initMap() {
         console.log("initMap: " + gPropertyOfInterest );
 
@@ -193,42 +208,37 @@
         var work1 = "7120 Hurontario St, Mississauga, ON L5S 1Z8";
         var work2 = "101 College St, Toronto, ON M5G 1L7";
 
-        // TODO: Need to figure out how to set the time, but fix the day.
-        var travelDate = new Date();
-        var offset = [2,1,0,0,0,-1,-2];
-        travelDate.setDate( travelDate.getDate() + offset[ travelDate.getDay() ]);
- 
         var mr = new MapRequest();
         mr.start = gPropertyOfInterest;
         mr.end = work1;
-        mr.departTime = new Date('2018-10-10T08:00:00');
+        mr.departTime = getTravelDate(8,0);
         mrQueue.push( mr );
 
         // reverse trip
         mr = new MapRequest();
         mr.start = work1;
         mr.end = gPropertyOfInterest;
-        mr.departTime = new Date('2018-10-10T16:30:00');
+        mr.departTime = getTravelDate(16,30);
         mrQueue.push( mr );
 
         mr = new MapRequest();
         mr.start = gPropertyOfInterest;
         mr.end = work1;
-        mr.departTime = new Date('2018-10-10T07:00:00');
+        mr.departTime = getTravelDate(7,0);
         mrQueue.push( mr );
 
         // reverse trip
         mr = new MapRequest();
         mr.start = gPropertyOfInterest;
         mr.end = work1;
-        mr.departTime = new Date('2018-10-10T15:30:00');
+        mr.departTime = getTravelDate(15,30);
         mrQueue.push( mr );
 
         mr = new MapRequest();
         mr.start = gPropertyOfInterest;
         mr.end = work2;
         mr.mode = google.maps.DirectionsTravelMode.TRANSIT;
-        mr.departTime = new Date('2018-10-10T09:00:00');
+        mr.departTime = getTravelDate(9,0);
         mrQueue.push( mr );
 
         // reverse trip
@@ -236,7 +246,7 @@
         mr.start = work2;
         mr.end = gPropertyOfInterest;
         mr.mode = google.maps.DirectionsTravelMode.TRANSIT;
-        mr.departTime = new Date('2018-10-10T17:30:00');
+        mr.departTime = getTravelDate(17,30);
         mrQueue.push( mr );
 
         for( i = 0; i < mrQueue.length; ++i ) {
